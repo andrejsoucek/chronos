@@ -7,12 +7,12 @@ import (
 	"github.com/andrejsoucek/chronos/pkg/clockify"
 )
 
-func ShowReport(c *clockify.Clockify, from time.Time, to time.Time) error {
+func ShowReport(c *clockify.Clockify, projectId string, from time.Time, to time.Time) error {
 	data, err := c.GetReport(from, to)
 	if err != nil {
 		return err
 	}
 
-	ui.RenderReport(from.Month(), data)
+	ui.RenderReport(c, projectId, from.Month(), data)
 	return nil
 }

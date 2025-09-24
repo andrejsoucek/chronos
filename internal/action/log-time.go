@@ -8,9 +8,11 @@ import (
 
 func LogTime(c *clockify.Clockify, projectId string, duration time.Duration, taskName string) error {
 	te := &clockify.TimeEntry{
+		Time:        time.Now(),
 		Duration:    duration,
 		Description: taskName,
 		ProjectID:   projectId,
 	}
-	return c.LogTime(te)
+	_, err := c.LogTime(te)
+	return err
 }

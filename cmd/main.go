@@ -93,7 +93,7 @@ func main() {
 
 					firstOfMonth := time.Date(currentYear, currentMonth, 1, 0, 0, 0, 0, currentLocation)
 					lastOfMonth := firstOfMonth.AddDate(0, 1, -1)
-					err := action.ShowReport(cify, firstOfMonth, lastOfMonth)
+					err := action.ShowReport(cify, projectId, firstOfMonth, lastOfMonth)
 					if err != nil {
 						return err
 					}
