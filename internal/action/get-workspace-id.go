@@ -1,9 +1,9 @@
 package action
 
 import (
-	"github.com/andrejsoucek/chronos/pkg"
+	"github.com/andrejsoucek/chronos/pkg/clockify"
 )
 
-func GetWorkspaceID(clockify *pkg.Clockify) (string, error) {
+func GetWorkspaceID(clockify *clockify.Clockify) (string, error) {
 	return clockify.GetWorkspaceID()
 }

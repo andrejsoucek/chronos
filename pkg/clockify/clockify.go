@@ -1,25 +1,37 @@
-package pkg
+package clockify
 
 import (
 	"bytes"
 	"encoding/json"
 	"errors"
 	"io"
+	"log"
 	"net/http"
 	"time"
 )
 
 type ClockifyConfig struct {
-	APIKey    string
-	BaseURL   string
-	UserURL   string
-	Workspace string
+	APIKey      string
+	BaseURL     string
+	UserURL     string
+	WorkspaceID string
+	UserID      string
 }
 
 type TimeEntry struct {
 	Duration    time.Duration
 	Description string
 	ProjectID   string
+}
+
+type ReportTimeEntry struct {
+	ID           string `json:"id"`
+	Description  string `json:"description"`
+	TimeInterval struct {
+		Start time.Time `json:"start"`
+		End   time.Time `json:"end"`
+	} `json:"timeInterval"`
+	IsLocked bool `json:"isLocked"`
 }
 
 type Clockify struct {
@@ -84,12 +96,12 @@ func (c *Clockify) LogTime(te *TimeEntry) error {
 		"description": te.Description,
 	}
 
-	json, err := json.Marshal(body)
+	jsonBody, err := json.Marshal(body)
 	if err != nil {
 		return err
 	}
 
-	req.Body = io.NopCloser(bytes.NewBuffer(json))
+	req.Body = io.NopCloser(bytes.NewBuffer(jsonBody))
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := http.DefaultClient.Do(req)
@@ -100,6 +112,49 @@ func (c *Clockify) LogTime(te *TimeEntry) error {
 	defer resp.Body.Close()
 
 	return nil
+}
+
+func (c *Clockify) GetReport(from time.Time, to time.Time) ([]ReportTimeEntry, error) {
+	log.Default().Println(c.Config.BaseURL + "user/" + c.Config.UserID + "/time-entries")
+	req, err := c.prepareReq(http.MethodGet, c.Config.BaseURL+"user/"+c.Config.UserID+"/time-entries")
+	if err != nil {
+		return nil, err
+	}
+
+	body := map[string]interface{}{
+		"start":     from.Format(time.RFC3339),
+		"end":       to.Format(time.RFC3339),
+		"page-size": 1000,
+	}
+
+	jsonBody, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Body = io.NopCloser(bytes.NewBuffer(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusOK {
+		bodyBytes, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return nil, err
+		}
+
+		var reportEntries []ReportTimeEntry
+		if err := json.Unmarshal(bodyBytes, &reportEntries); err != nil {
+			return nil, err
+		}
+
+		return reportEntries, nil
+	}
+
+	return nil, errors.New("failed to get report, response code: " + resp.Status)
 }
 
 func (c *Clockify) prepareReq(method string, url string) (*http.Request, error) {

@@ -3,14 +3,14 @@ package action
 import (
 	"time"
 
-	"github.com/andrejsoucek/chronos/pkg"
+	"github.com/andrejsoucek/chronos/pkg/clockify"
 )
 
-func LogTime(clockify *pkg.Clockify, projectId string, duration time.Duration, taskName string) error {
-	te := &pkg.TimeEntry{
+func LogTime(c *clockify.Clockify, projectId string, duration time.Duration, taskName string) error {
+	te := &clockify.TimeEntry{
 		Duration:    duration,
 		Description: taskName,
 		ProjectID:   projectId,
 	}
-	return clockify.LogTime(te)
+	return c.LogTime(te)
 }

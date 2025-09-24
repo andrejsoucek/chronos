@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/andrejsoucek/chronos/internal/action"
-	"github.com/andrejsoucek/chronos/pkg"
+	"github.com/andrejsoucek/chronos/pkg/clockify"
 	"github.com/joho/godotenv"
 	"github.com/urfave/cli/v3"
 )
@@ -19,18 +19,19 @@ func main() {
 	if err != nil {
 		log.Fatal("Error getting user home directory", err)
 	}
-	err = godotenv.Load(filepath.Join(homeDir, ".chronos", ".env"))
+	err = godotenv.Load(filepath.Join(homeDir, ".chronos", ".env"), ".env")
 	if err != nil {
 		log.Fatal("Error loading .env file", err)
 	}
 
 	projectId := os.Getenv("CLOCKIFY_DEFAULT_PROJECT")
 
-	clockify := pkg.NewClockify(pkg.ClockifyConfig{
-		APIKey:    os.Getenv("CLOCKIFY_API_KEY"),
-		BaseURL:   os.Getenv("CLOCKIFY_BASE_URL"),
-		UserURL:   os.Getenv("CLOCKIFY_USER_URL"),
-		Workspace: os.Getenv("CLOCKIFY_WORKSPACE"),
+	cify := clockify.NewClockify(clockify.ClockifyConfig{
+		APIKey:      os.Getenv("CLOCKIFY_API_KEY"),
+		BaseURL:     os.Getenv("CLOCKIFY_BASE_URL"),
+		UserURL:     os.Getenv("CLOCKIFY_USER_URL"),
+		WorkspaceID: os.Getenv("CLOCKIFY_WORKSPACE"),
+		UserID:      os.Getenv("CLOCKIFY_USER_ID"),
 	})
 
 	cmd := &cli.Command{
@@ -43,7 +44,7 @@ func main() {
 				Aliases: []string{"ws"},
 				Usage:   "Get clockify workspace ID",
 				Action: func(context.Context, *cli.Command) error {
-					userInfo, err := action.GetWorkspaceID(clockify)
+					userInfo, err := action.GetWorkspaceID(cify)
 					if err != nil {
 						return err
 					}
@@ -73,7 +74,7 @@ func main() {
 						return err
 					}
 					task := cmd.StringArg("task")
-					err = action.LogTime(clockify, projectId, duration, task)
+					err = action.LogTime(cify, projectId, duration, task)
 					if err != nil {
 						return err
 					}
@@ -86,8 +87,16 @@ func main() {
 				Aliases: []string{"r"},
 				Usage:   "Show a report of logged time entries",
 				Action: func(ctx context.Context, cmd *cli.Command) error {
-					// Placeholder for future report functionality
-					log.Println("Report functionality is not yet implemented.")
+					now := time.Now()
+					currentYear, currentMonth, _ := now.Date()
+					currentLocation := now.Location()
+
+					firstOfMonth := time.Date(currentYear, currentMonth, 1, 0, 0, 0, 0, currentLocation)
+					lastOfMonth := firstOfMonth.AddDate(0, 1, -1)
+					err := action.ShowReport(cify, firstOfMonth, lastOfMonth)
+					if err != nil {
+						return err
+					}
 					return nil
 				},
 			},
