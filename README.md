@@ -33,13 +33,21 @@ CLOCKIFY_BASE_URL=https://api.clockify.me/api/v1/workspaces/YOUR_WORKSPACE_ID
 CLOCKIFY_USER_URL=https://api.clockify.me/api/v1/user
 CLOCKIFY_WORKSPACE=your_workspace_id
 CLOCKIFY_DEFAULT_PROJECT=your_default_project_id
+GITLAB_ACCESS_TOKEN=
+GITLAB_BASE_URL=https://gitlab.com/api/v4/
+GITLAB_USER_ID=123456789
+LINEAR_API_KEY=
+LINEAR_BASE_URL=https://api.linear.app/graphql
 ```
 
 ### Getting Your Configuration Values
 
-1. **API Key**: Get your API key from [Clockify Settings](https://clockify.me/user/settings)
+1. **Clockify API Key**: Get your API key from [Clockify Settings](https://clockify.me/user/settings)
 2. **Workspace ID**: Run `chronos workspace` to get your workspace information
 3. **Project ID**: You can find project IDs by opening a [Project](https://app.clockify.me/projects) and copying the ID from the URL
+4. **Gitlab Access Token**: Get your API key from [Gitlab Settings](https://gitlab.com/-/user_settings/personal_access_tokens)
+5. **Gitlab User ID**: Open `https://gitlab.com/api/v4/users?username=YOUR_USERNAME` in your browser.
+6. **Linear API Key**: Get your API key from [Linear Settings](https://linear.app/aristone/settings/account/security/api-keys)
 
 ## Available Commands
 
