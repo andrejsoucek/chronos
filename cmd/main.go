@@ -10,6 +10,8 @@ import (
 
 	"github.com/andrejsoucek/chronos/internal/action"
 	"github.com/andrejsoucek/chronos/pkg/clockify"
+	"github.com/andrejsoucek/chronos/pkg/gitlab"
+	"github.com/andrejsoucek/chronos/pkg/linear"
 	"github.com/joho/godotenv"
 	"github.com/urfave/cli/v3"
 )
@@ -26,7 +28,18 @@ func main() {
 
 	projectId := os.Getenv("CLOCKIFY_DEFAULT_PROJECT")
 
-	cify := clockify.NewClockify(clockify.ClockifyConfig{
+	l := linear.NewLinear(&linear.LinearConfig{
+		APIKey:  os.Getenv("LINEAR_API_KEY"),
+		BaseURL: os.Getenv("LINEAR_BASE_URL"),
+	})
+
+	g := gitlab.NewGitlab(&gitlab.GitlabConfig{
+		APIKey:  os.Getenv("GITLAB_ACCESS_TOKEN"),
+		BaseURL: os.Getenv("GITLAB_BASE_URL"),
+		UserID:  os.Getenv("GITLAB_USER_ID"),
+	})
+
+	cify := clockify.NewClockify(&clockify.ClockifyConfig{
 		APIKey:      os.Getenv("CLOCKIFY_API_KEY"),
 		BaseURL:     os.Getenv("CLOCKIFY_BASE_URL"),
 		UserURL:     os.Getenv("CLOCKIFY_USER_URL"),
@@ -93,7 +106,7 @@ func main() {
 
 					firstOfMonth := time.Date(currentYear, currentMonth, 1, 0, 0, 0, 0, currentLocation)
 					lastOfMonth := firstOfMonth.AddDate(0, 1, -1)
-					err := action.ShowReport(cify, projectId, firstOfMonth, lastOfMonth)
+					err := action.ShowReport(cify, l, g, projectId, firstOfMonth, lastOfMonth)
 					if err != nil {
 						return err
 					}

@@ -36,10 +36,10 @@ type ReportTimeEntry struct {
 }
 
 type Clockify struct {
-	Config ClockifyConfig
+	Config *ClockifyConfig
 }
 
-func NewClockify(config ClockifyConfig) *Clockify {
+func NewClockify(config *ClockifyConfig) *Clockify {
 	return &Clockify{
 		Config: config,
 	}

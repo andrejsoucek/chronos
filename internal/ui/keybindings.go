@@ -62,12 +62,30 @@ func (ui *ReportUI) setKeybindings(g *gocui.Gui) error {
 		return err
 	}
 
-	// Add keybinding to focus log area with 'L' key
-	if err := g.SetKeybinding("", gocui.KeyCtrlL, gocui.ModNone, ui.focusLog); err != nil {
+	// Add keybinding to focus table area with Ctrl+T
+	if err := g.SetKeybinding("", gocui.KeyCtrlT, gocui.ModNone, ui.focusTable); err != nil {
 		return err
 	}
-	// Add keybinding to focus table area with 'T' key
-	if err := g.SetKeybinding("", gocui.KeyCtrlT, gocui.ModNone, ui.focusTable); err != nil {
+	// Add keybinding to focus linear activity with Ctrl+L
+	if err := g.SetKeybinding("", gocui.KeyCtrlL, gocui.ModNone, ui.focusLinearActivity); err != nil {
+		return err
+	}
+	// Add keybinding to focus git activity with Ctrl+G
+	if err := g.SetKeybinding("", gocui.KeyCtrlG, gocui.ModNone, ui.focusGitActivity); err != nil {
+		return err
+	}
+
+	// Scroll keybindings for activity views
+	if err := g.SetKeybinding("linearActivity", gocui.KeyArrowUp, gocui.ModNone, ui.scrollLinearActivityUp); err != nil {
+		return err
+	}
+	if err := g.SetKeybinding("linearActivity", gocui.KeyArrowDown, gocui.ModNone, ui.scrollLinearActivityDown); err != nil {
+		return err
+	}
+	if err := g.SetKeybinding("gitActivity", gocui.KeyArrowUp, gocui.ModNone, ui.scrollGitActivityUp); err != nil {
+		return err
+	}
+	if err := g.SetKeybinding("gitActivity", gocui.KeyArrowDown, gocui.ModNone, ui.scrollGitActivityDown); err != nil {
 		return err
 	}
 
@@ -195,17 +213,25 @@ func (ui *ReportUI) scrollLogDown(g *gocui.Gui, v *gocui.View) error {
 	return nil
 }
 
-func (ui *ReportUI) focusLog(g *gocui.Gui, v *gocui.View) error {
+func (ui *ReportUI) focusTable(g *gocui.Gui, v *gocui.View) error {
 	if !ui.isEditing && !ui.isAddingTask {
-		_, err := g.SetCurrentView("log")
+		_, err := g.SetCurrentView("table")
 		return err
 	}
 	return nil
 }
 
-func (ui *ReportUI) focusTable(g *gocui.Gui, v *gocui.View) error {
+func (ui *ReportUI) focusLinearActivity(g *gocui.Gui, v *gocui.View) error {
 	if !ui.isEditing && !ui.isAddingTask {
-		_, err := g.SetCurrentView("table")
+		_, err := g.SetCurrentView("linearActivity")
+		return err
+	}
+	return nil
+}
+
+func (ui *ReportUI) focusGitActivity(g *gocui.Gui, v *gocui.View) error {
+	if !ui.isEditing && !ui.isAddingTask {
+		_, err := g.SetCurrentView("gitActivity")
 		return err
 	}
 	return nil
@@ -270,4 +296,49 @@ func (ui *ReportUI) cancelAddTask(g *gocui.Gui, v *gocui.View) error {
 
 func quit(g *gocui.Gui, v *gocui.View) error {
 	return gocui.ErrQuit
+}
+
+// Scroll functions for activity views
+func (ui *ReportUI) scrollLinearActivityUp(g *gocui.Gui, v *gocui.View) error {
+	if v != nil {
+		ox, oy := v.Origin()
+		if oy > 0 {
+			if err := v.SetOrigin(ox, oy-1); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func (ui *ReportUI) scrollLinearActivityDown(g *gocui.Gui, v *gocui.View) error {
+	if v != nil {
+		ox, oy := v.Origin()
+		if err := v.SetOrigin(ox, oy+1); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (ui *ReportUI) scrollGitActivityUp(g *gocui.Gui, v *gocui.View) error {
+	if v != nil {
+		ox, oy := v.Origin()
+		if oy > 0 {
+			if err := v.SetOrigin(ox, oy-1); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func (ui *ReportUI) scrollGitActivityDown(g *gocui.Gui, v *gocui.View) error {
+	if v != nil {
+		ox, oy := v.Origin()
+		if err := v.SetOrigin(ox, oy+1); err != nil {
+			return err
+		}
+	}
+	return nil
 }

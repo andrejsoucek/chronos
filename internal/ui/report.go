@@ -8,6 +8,8 @@ import (
 
 	"github.com/andrejsoucek/chronos/pkg/clockify"
 	"github.com/andrejsoucek/chronos/pkg/datetimeutils"
+	"github.com/andrejsoucek/chronos/pkg/gitlab"
+	"github.com/andrejsoucek/chronos/pkg/linear"
 	"github.com/jroimartin/gocui"
 )
 
@@ -25,24 +27,33 @@ type CellPosition struct {
 }
 
 type ReportUI struct {
-	clockifyClient   *clockify.Clockify
-	data             []clockify.ReportTimeEntry
-	reportMonth      time.Time
-	taskDayMap       map[string]map[int]time.Duration
-	taskDayIDMap     map[string]map[int]string // Maps task+day to time entry ID for existing entries
-	taskNames        []string
-	days             []int
-	selectedCell     CellPosition
-	isEditing        bool
-	editBuffer       string
-	logMessages      []string // Changed from single string to slice
-	projectId        string
-	isAddingTask     bool   // Track if we're in "add new task" mode
-	newTaskBuffer    string // Buffer for new task name input
-	shouldAutoScroll bool   // Flag to control when to auto-scroll log
+	clockifyClient     *clockify.Clockify
+	linearLastActivity []linear.LastActivityItem
+	gitlabLastActivity []gitlab.LastActivityItem
+	data               []clockify.ReportTimeEntry
+	reportMonth        time.Time
+	taskDayMap         map[string]map[int]time.Duration
+	taskDayIDMap       map[string]map[int]string // Maps task+day to time entry ID for existing entries
+	taskNames          []string
+	days               []int
+	selectedCell       CellPosition
+	isEditing          bool
+	editBuffer         string
+	logMessages        []string // Changed from single string to slice
+	projectId          string
+	isAddingTask       bool   // Track if we're in "add new task" mode
+	newTaskBuffer      string // Buffer for new task name input
+	shouldAutoScroll   bool   // Flag to control when to auto-scroll log
 }
 
-func RenderReport(c *clockify.Clockify, projectId string, month time.Month, data []clockify.ReportTimeEntry) {
+func RenderReport(
+	c *clockify.Clockify,
+	projectId string,
+	month time.Month,
+	data []clockify.ReportTimeEntry,
+	linearLastActivity []linear.LastActivityItem,
+	gitlabLastActivity []gitlab.LastActivityItem,
+) {
 	reportMonth := time.Date(time.Now().Year(), month, 1, 0, 0, 0, 0, time.UTC)
 	g, err := gocui.NewGui(gocui.OutputNormal)
 	g.InputEsc = true
@@ -56,11 +67,13 @@ func RenderReport(c *clockify.Clockify, projectId string, month time.Month, data
 	defer g.Close()
 
 	ui := &ReportUI{
-		clockifyClient: c,
-		data:           data,
-		reportMonth:    reportMonth,
-		days:           datetimeutils.DaysInMonth(reportMonth),
-		projectId:      projectId,
+		clockifyClient:     c,
+		linearLastActivity: linearLastActivity,
+		gitlabLastActivity: gitlabLastActivity,
+		data:               data,
+		reportMonth:        reportMonth,
+		days:               datetimeutils.DaysInMonth(reportMonth),
+		projectId:          projectId,
 	}
 
 	taskDayMap, taskNamesMap, taskDayIDMap := groupDataByTaskAndDay(data)
@@ -89,10 +102,55 @@ func RenderReport(c *clockify.Clockify, projectId string, month time.Month, data
 func (ui *ReportUI) layout(g *gocui.Gui) error {
 	maxX, maxY := g.Size()
 
-	logHeight := 5
-	tableHeight := maxY - logHeight - 1
+	// Ensure minimum terminal size to avoid layout issues
+	if maxY < 60 {
+		// Fall back to simple layout for small terminals
+		return ui.simpleLayout(g)
+	}
 
-	if v, err := g.SetView("table", 0, 0, maxX-1, tableHeight); err != nil {
+	// 4-panel layout
+	// Top section: 1/3 of screen height
+	topHeight := maxY / 3
+	if topHeight < 3 {
+		topHeight = 3
+	}
+
+	// Split top section in half horizontally
+	topMidX := maxX / 2
+
+	// Bottom section calculations
+	remainingHeight := maxY - topHeight - 1 // -1 for separator
+	logHeight := 6
+	helpHeight := 2 // Reserve space for help text
+	if logHeight > (remainingHeight-helpHeight)/2 {
+		logHeight = (remainingHeight - helpHeight) / 2
+	}
+	tableHeight := remainingHeight - logHeight - helpHeight - 1 // -1 for separator
+
+	// Top left: Recent Linear Activity
+	if v, err := g.SetView("linearActivity", 0, 0, topMidX-1, topHeight); err != nil {
+		if err != gocui.ErrUnknownView {
+			return err
+		}
+		v.Title = " Recent Linear Activity "
+		v.Wrap = true
+		v.Autoscroll = false
+	}
+
+	// Top right: Recent Git Activity
+	if v, err := g.SetView("gitActivity", topMidX, 0, maxX-1, topHeight); err != nil {
+		if err != gocui.ErrUnknownView {
+			return err
+		}
+		v.Title = " Recent Git Activity "
+		v.Wrap = true
+		v.Autoscroll = false
+	}
+
+	// Time Report Table
+	tableStartY := topHeight + 1
+	tableEndY := tableStartY + tableHeight - 1
+	if v, err := g.SetView("table", 0, tableStartY, maxX-1, tableEndY); err != nil {
 		if err != gocui.ErrUnknownView {
 			return err
 		}
@@ -104,12 +162,25 @@ func (ui *ReportUI) layout(g *gocui.Gui) error {
 		}
 	}
 
-	if v, err := g.SetView("log", 0, tableHeight+1, maxX-1, maxY-1); err != nil {
+	// Log view
+	logStartY := tableEndY + 1
+	logEndY := logStartY + logHeight - 1
+	if v, err := g.SetView("log", 0, logStartY, maxX-1, logEndY); err != nil {
 		if err != gocui.ErrUnknownView {
 			return err
 		}
+		v.Title = " Log "
 		v.Wrap = true
 		v.Autoscroll = false
+	}
+
+	// Help view at the very bottom
+	helpStartY := logEndY + 1
+	if v, err := g.SetView("help", 0, helpStartY, maxX-1, maxY-1); err != nil {
+		if err != gocui.ErrUnknownView {
+			return err
+		}
+		v.Frame = false // No border for help text
 	}
 
 	if ui.isAddingTask {
@@ -151,6 +222,47 @@ func (ui *ReportUI) layout(g *gocui.Gui) error {
 		fmt.Fprint(v, tableContent)
 	}
 
+	// Update content for activity views (only in 4-panel layout)
+	if v, err := g.View("linearActivity"); err == nil {
+		v.Clear()
+		if len(ui.linearLastActivity) > 0 {
+			for _, item := range ui.linearLastActivity {
+				// Parse the updated_at time and format it
+				updatedTime, err := time.Parse(time.RFC3339, item.UpdatedAt)
+				var timeStr string
+				if err != nil {
+					timeStr = item.UpdatedAt // fallback to raw string if parsing fails
+				} else {
+					timeStr = updatedTime.Format("Jan 2 15:04")
+				}
+
+				fmt.Fprintf(v, "%s | %-8s | %s\n", timeStr, item.Identifier, item.Title)
+			}
+		} else {
+			fmt.Fprintln(v, "No recent Linear activity found")
+		}
+	}
+
+	if v, err := g.View("gitActivity"); err == nil {
+		v.Clear()
+		if len(ui.gitlabLastActivity) > 0 {
+			for _, item := range ui.gitlabLastActivity {
+				var name string
+				if item.Title != nil {
+					name = *item.Title
+				} else if item.PushData != nil {
+					name = item.PushData.Ref
+				} else {
+					name = "N/A"
+				}
+
+				fmt.Fprintf(v, "%-12s | %s\n", item.Action, name)
+			}
+		} else {
+			fmt.Fprintln(v, "No recent Git activity found")
+		}
+	}
+
 	if v, err := g.View("log"); err == nil {
 		v.Clear()
 		v.Title = " Log "
@@ -166,121 +278,105 @@ func (ui *ReportUI) layout(g *gocui.Gui) error {
 		}
 	}
 
-	return nil
-}
-
-func (ui *ReportUI) editCell(g *gocui.Gui, v *gocui.View) error {
-	if ui.isEditing {
-		return ui.saveEdit(g, v)
-	}
-
-	ui.isEditing = true
-	task := ui.taskNames[ui.selectedCell.TaskIndex]
-	day := ui.days[ui.selectedCell.DayIndex]
-
-	if duration, exists := ui.taskDayMap[task][day]; exists && duration > 0 {
-		ui.editBuffer = datetimeutils.ShortDur(duration)
-	} else {
-		ui.editBuffer = ""
+	// Update help view with keyboard shortcuts
+	if v, err := g.View("help"); err == nil {
+		v.Clear()
+		helpText := "\033[1mArrow keys\033[0m: Navigate | \033[1mEnter\033[0m: Edit/Save | " +
+			"\033[1mQ/Esc\033[0m: Cancel | \033[1mCtrl+N\033[0m: Add new task | " +
+			"\033[1mCtrl+D\033[0m: Delete entry | \033[1mCtrl+R\033[0m: Refresh | " +
+			"\033[1mCtrl+T\033[0m: Focus table | \033[1mCtrl+L\033[0m: Focus Linear | " +
+			"\033[1mCtrl+G\033[0m: Focus Git | \033[1mCtrl+C\033[0m: Exit"
+		fmt.Fprint(v, helpText)
+		fmt.Fprint(v, "\nDuration format: 1h30m, 2h, 45m, etc.")
 	}
 
 	return nil
 }
 
-func (ui *ReportUI) saveEdit(g *gocui.Gui, v *gocui.View) error {
-	if ui.editBuffer == "" {
-		ui.isEditing = false
-		ui.clearLog()
-		return nil
+// simpleLayout provides a fallback 2-panel layout for small terminals
+func (ui *ReportUI) simpleLayout(g *gocui.Gui) error {
+	maxX, maxY := g.Size()
+
+	logHeight := 5
+	tableHeight := maxY - logHeight - 1
+
+	if v, err := g.SetView("table", 0, 0, maxX-1, tableHeight); err != nil {
+		if err != gocui.ErrUnknownView {
+			return err
+		}
+		v.Title = fmt.Sprintf(" Time Report - %s ", ui.reportMonth.Format("January 2006"))
+		v.Wrap = false
+
+		if _, err := g.SetCurrentView("table"); err != nil {
+			return err
+		}
 	}
 
-	duration, err := time.ParseDuration(ui.editBuffer)
-	if err != nil {
-		// Invalid duration format - show error and stay in exit edit mode
-		ui.logError(fmt.Sprintf("Invalid duration format: %s", ui.editBuffer))
-		ui.isEditing = false
-		ui.editBuffer = ""
-		return nil
+	if v, err := g.SetView("log", 0, tableHeight+1, maxX-1, maxY-1); err != nil {
+		if err != gocui.ErrUnknownView {
+			return err
+		}
+		v.Title = " Log "
+		v.Wrap = true
+		v.Autoscroll = false
 	}
 
-	task := ui.taskNames[ui.selectedCell.TaskIndex]
-	day := ui.days[ui.selectedCell.DayIndex]
+	// Handle popup for adding tasks (same as main layout)
+	if ui.isAddingTask {
+		popupWidth := 50
+		popupHeight := 5
+		x0 := (maxX - popupWidth) / 2
+		y0 := (maxY - popupHeight) / 2
+		x1 := x0 + popupWidth
+		y1 := y0 + popupHeight
 
-	currentTime := time.Now()
-	targetDate := time.Date(
-		ui.reportMonth.Year(),
-		ui.reportMonth.Month(),
-		day,
-		currentTime.Hour(),
-		currentTime.Minute(),
-		currentTime.Second(),
-		0,
-		time.UTC,
-	)
+		if v, err := g.SetView("taskPopup", x0, y0, x1, y1); err != nil {
+			if err != gocui.ErrUnknownView {
+				return err
+			}
+			v.Title = " Add New Task "
+			v.Wrap = true
+			v.Editable = true
+			v.Editor = &taskEditor{ui: ui}
 
-	var existingID string
-	if ui.taskDayIDMap[task] != nil {
-		existingID = ui.taskDayIDMap[task][day]
-	}
-
-	if ui.taskDayMap[task] == nil {
-		ui.taskDayMap[task] = make(map[int]time.Duration)
-	}
-	ui.taskDayMap[task][day] = duration
-
-	// Edit existing time entry
-	if existingID != "" {
-		timeEntry := &clockify.TimeEntry{
-			Time:        targetDate,
-			Duration:    duration,
-			Description: task,
-			ProjectID:   ui.projectId,
+			if _, err := g.SetCurrentView("taskPopup"); err != nil {
+				return err
+			}
 		}
 
-		ui.logInfo(
-			fmt.Sprintf(
-				"Attempting to update existing entry (ID %s): %s for '%s' on %s",
-				existingID,
-				duration,
-				task,
-				targetDate.Format("2006-01-02"),
-			),
-		)
-
-		if err := ui.clockifyClient.EditLog(existingID, timeEntry); err != nil {
-			ui.logError(fmt.Sprintf("Failed to update time entry: %v", err))
-			ui.editBuffer = "Update failed"
-			return nil
+		if v, err := g.View("taskPopup"); err == nil {
+			v.Clear()
+			fmt.Fprintf(v, "Task name: %s\n\nPress Enter to confirm, Esc to cancel", ui.newTaskBuffer)
+			v.SetCursor(len(ui.newTaskBuffer), 0)
 		}
-
-		ui.logInfo(fmt.Sprintf("Successfully updated %s for %s on day %d (ID: %s)", duration, task, day, existingID))
 	} else {
-		timeEntry := &clockify.TimeEntry{
-			Time:        targetDate,
-			Duration:    duration,
-			Description: task,
-			ProjectID:   ui.projectId,
+		if err := g.DeleteView("taskPopup"); err != nil && err != gocui.ErrUnknownView {
+			return err
 		}
-
-		ui.logInfo(fmt.Sprintf("Attempting to log new entry: %s for '%s' on %s", duration, task, targetDate.Format("2006-01-02")))
-
-		newEntryID, err := ui.clockifyClient.LogTime(timeEntry)
-		if err != nil {
-			ui.logError(fmt.Sprintf("Failed to save time entry: %v", err))
-			ui.editBuffer = "Save failed"
-			return nil
-		}
-
-		if ui.taskDayIDMap[task] == nil {
-			ui.taskDayIDMap[task] = make(map[int]string)
-		}
-		ui.taskDayIDMap[task][day] = newEntryID
-
-		ui.logInfo(fmt.Sprintf("Successfully logged %s for %s on day %d (ID: %s)", duration, task, day, newEntryID))
 	}
 
-	ui.isEditing = false
-	ui.editBuffer = ""
+	// Update table content
+	if v, err := g.View("table"); err == nil {
+		v.Clear()
+		tableContent := ui.buildTable()
+		fmt.Fprint(v, tableContent)
+	}
+
+	// Update log content
+	if v, err := g.View("log"); err == nil {
+		v.Clear()
+		v.Title = " Log "
+		if len(ui.logMessages) > 0 {
+			for _, msg := range ui.logMessages {
+				fmt.Fprintln(v, msg)
+			}
+			if ui.shouldAutoScroll {
+				ui.scrollToBottomOfLog(g)
+				ui.shouldAutoScroll = false
+			}
+		}
+	}
+
 	return nil
 }
 
@@ -291,11 +387,6 @@ func (ui *ReportUI) buildTable() string {
 	ui.addSeparatorLine(&sb)
 	ui.buildTaskRows(&sb)
 	ui.addTotalsRow(&sb)
-
-	sb.WriteString(
-		"\n\n\033[1mArrow keys\033[0m: Navigate | \033[1mEnter\033[0m: Edit/Save | \033[1mQ/Esc\033[0m: Cancel | \033[1mCtrl+N\033[0m: Add new task | \033[1mCtrl+D\033[0m: Delete entry | \033[1mCtrl+R\033[0m: Refresh the table | \033[1mCtrl+L\033[0m: Focus log | \033[1mCtrl+T\033[0m: Focus table | \033[1mCtrl+C\033[0m: Exit",
-	)
-	sb.WriteString("\nDuration format: 1h30m, 2h, 45m, etc.")
 
 	return sb.String()
 }
@@ -461,85 +552,4 @@ func truncateString(s string, maxLen int) string {
 		return s[:maxLen]
 	}
 	return s[:maxLen-ellipsisLength] + "..."
-}
-
-func (ui *ReportUI) deleteEntry(g *gocui.Gui, v *gocui.View) error {
-	if ui.isEditing || ui.isAddingTask {
-		return nil
-	}
-
-	task := ui.taskNames[ui.selectedCell.TaskIndex]
-	day := ui.days[ui.selectedCell.DayIndex]
-
-	var existingID string
-	if ui.taskDayIDMap[task] != nil {
-		existingID = ui.taskDayIDMap[task][day]
-	}
-
-	if existingID == "" {
-		ui.logError("No time entry to delete at this position")
-		return nil
-	}
-
-	currentDuration := ui.taskDayMap[task][day]
-
-	ui.logInfo(fmt.Sprintf("Attempting to delete entry (ID %s): %s for '%s' on day %d",
-		existingID, datetimeutils.ShortDur(currentDuration), task, day))
-
-	if err := ui.clockifyClient.DeleteLog(existingID); err != nil {
-		ui.logError(fmt.Sprintf("Failed to delete time entry: %v", err))
-		return nil
-	}
-
-	delete(ui.taskDayMap[task], day)
-	delete(ui.taskDayIDMap[task], day)
-
-	ui.logInfo(fmt.Sprintf("Successfully deleted %s for %s on day %d",
-		datetimeutils.ShortDur(currentDuration), task, day))
-
-	return nil
-}
-
-func (ui *ReportUI) refreshData(g *gocui.Gui, v *gocui.View) error {
-	// Don't refresh if we're in edit mode or adding a task
-	if ui.isEditing || ui.isAddingTask {
-		return nil
-	}
-
-	ui.logInfo("Refreshing data...")
-
-	// Calculate the time range for the current report month
-	from := time.Date(ui.reportMonth.Year(), ui.reportMonth.Month(), 1, 0, 0, 0, 0, time.UTC)
-	to := from.AddDate(0, 1, 0).Add(-time.Second) // Last second of the month
-
-	// Fetch fresh data from Clockify
-	data, err := ui.clockifyClient.GetReport(from, to)
-	if err != nil {
-		ui.logError(fmt.Sprintf("Failed to refresh data: %v", err))
-		return nil
-	}
-
-	// Update the UI data
-	ui.data = data
-	taskDayMap, taskNamesMap, taskDayIDMap := groupDataByTaskAndDay(data)
-	ui.taskDayMap = taskDayMap
-	ui.taskDayIDMap = taskDayIDMap
-
-	// Update task names
-	ui.taskNames = make([]string, 0, len(taskNamesMap))
-	for task := range taskNamesMap {
-		ui.taskNames = append(ui.taskNames, task)
-	}
-
-	// Reset selected cell if it's out of bounds
-	if ui.selectedCell.TaskIndex >= len(ui.taskNames) {
-		ui.selectedCell.TaskIndex = 0
-	}
-	if len(ui.days) > 0 && ui.selectedCell.DayIndex >= len(ui.days) {
-		ui.selectedCell.DayIndex = 0
-	}
-
-	ui.logInfo(fmt.Sprintf("Data refreshed successfully - found %d time entries", len(data)))
-
-	return nil
 }
