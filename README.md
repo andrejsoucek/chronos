@@ -10,12 +10,15 @@ A command-line time tracking tool for Clockify that makes logging time entries q
 
 ## Installation
 
-### Prerequisites
+### Prebuilt Executable
 
-- Go 1.24.2 or later
-- A Clockify account and API key
+- Download executable from [Releases](https://github.com/andrejsoucek/chronos/releases)
+- Create a .env file in `$HOME/.chronos/.env` and add the configuration by following the guide below.
+- Optional: Move the optional to a directory that's included in your shell's `$PATH` environment variable, e. g. `/usr/local/bin`
 
 ### Build from Source
+
+- Go 1.24.2 or later
 
 ```bash
 git clone https://github.com/andrejsoucek/chronos.git
