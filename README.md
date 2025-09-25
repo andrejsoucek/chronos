@@ -31,14 +31,15 @@ go build -o chronos cmd/main.go
 Create a `.env` file in your `$HOME/.chronos` directory with the following configuration:
 
 ```env
-CLOCKIFY_API_KEY=your_api_key_here
-CLOCKIFY_BASE_URL=https://api.clockify.me/api/v1/workspaces/YOUR_WORKSPACE_ID
+CLOCKIFY_API_KEY=
+CLOCKIFY_DEFAULT_WORKSPACE=
+CLOCKIFY_DEFAULT_PROJECT=
+CLOCKIFY_USER_ID=
 CLOCKIFY_USER_URL=https://api.clockify.me/api/v1/user
-CLOCKIFY_WORKSPACE=your_workspace_id
-CLOCKIFY_DEFAULT_PROJECT=your_default_project_id
+CLOCKIFY_BASE_URL=https://api.clockify.me/api/v1/workspaces/$CLOCKIFY_DEFAULT_WORKSPACE/
 GITLAB_ACCESS_TOKEN=
 GITLAB_BASE_URL=https://gitlab.com/api/v4/
-GITLAB_USER_ID=123456789
+GITLAB_USER_ID=
 LINEAR_API_KEY=
 LINEAR_BASE_URL=https://api.linear.app/graphql
 ```
