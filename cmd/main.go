@@ -17,13 +17,27 @@ import (
 )
 
 func main() {
+	projectId, l, g, cify := loadConfiguration()
+	cmd := createCommands(projectId, l, g, cify)
+
+	if err := cmd.Run(context.Background(), os.Args); err != nil {
+		log.Fatal(err)
+	}
+}
+
+func loadConfiguration() (string, *linear.Linear, *gitlab.Gitlab, *clockify.Clockify) {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		log.Fatal("Error getting user home directory", err)
 	}
-	err = godotenv.Load(filepath.Join(homeDir, ".chronos", ".env"), ".env")
+
+	homeEnvPath := filepath.Join(homeDir, ".chronos", ".env")
+	err = godotenv.Load(homeEnvPath)
 	if err != nil {
-		log.Fatal("Error loading .env file", err)
+		err = godotenv.Load(".env")
+		if err != nil {
+			log.Fatal("Error loading .env file: neither", homeEnvPath, "nor .env could be loaded:", err)
+		}
 	}
 
 	projectId := os.Getenv("CLOCKIFY_DEFAULT_PROJECT")
@@ -47,7 +61,11 @@ func main() {
 		UserID:      os.Getenv("CLOCKIFY_USER_ID"),
 	})
 
-	cmd := &cli.Command{
+	return projectId, l, g, cify
+}
+
+func createCommands(projectId string, l *linear.Linear, g *gitlab.Gitlab, cify *clockify.Clockify) *cli.Command {
+	return &cli.Command{
 		Name:                  "chronos",
 		Usage:                 "A simple CLI tool to log time entries to Clockify",
 		EnableShellCompletion: true,
@@ -114,9 +132,5 @@ func main() {
 				},
 			},
 		},
-	}
-
-	if err := cmd.Run(context.Background(), os.Args); err != nil {
-		log.Fatal(err)
 	}
 }
