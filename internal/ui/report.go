@@ -14,10 +14,11 @@ import (
 )
 
 const (
-	taskColumnWidth = 35
-	dayColumnWidth  = 8
-	ellipsisLength  = 3
-	asciiEsc        = 27
+	taskColumnWidth    = 35
+	dayColumnWidth     = 8
+	ellipsisLength     = 3
+	asciiEsc           = 27
+	weekendPlaceholder = "x" // Used to visually differentiate weekends when empty
 )
 
 type CellPosition struct {
@@ -435,7 +436,7 @@ func (ui *ReportUI) buildTaskRows(sb *strings.Builder) {
 		for dayIndex, day := range ui.days {
 			duration := ui.taskDayMap[task][day]
 			isSelected := ui.selectedCell.TaskIndex == taskIndex && ui.selectedCell.DayIndex == dayIndex
-			ui.appendEditableCell(sb, duration, isSelected)
+			ui.appendEditableCell(sb, duration, isSelected, ui.isWeekend(day))
 		}
 		sb.WriteString("\n")
 	}
@@ -459,14 +460,18 @@ func (ui *ReportUI) appendDurationCell(sb *strings.Builder, duration time.Durati
 	}
 }
 
-func (ui *ReportUI) appendEditableCell(sb *strings.Builder, duration time.Duration, isSelected bool) {
+func (ui *ReportUI) appendEditableCell(sb *strings.Builder, duration time.Duration, isSelected bool, isWeekend bool) {
 	var cellContent string
 	if ui.isEditing && isSelected {
 		cellContent = "[" + ui.editBuffer + "]"
 	} else if duration > 0 {
 		cellContent = datetimeutils.ShortDur(duration)
 	} else {
-		cellContent = "-"
+		if isWeekend {
+			cellContent = weekendPlaceholder
+		} else {
+			cellContent = "-"
+		}
 	}
 
 	if isSelected && !ui.isEditing {
@@ -507,10 +512,21 @@ func (ui *ReportUI) addTotalsRow(sb *strings.Builder) {
 		if totalDuration > 0 {
 			sb.WriteString(fmt.Sprintf("%*s", dayColumnWidth, datetimeutils.ShortDur(totalDuration)))
 		} else {
-			sb.WriteString(fmt.Sprintf("%*s", dayColumnWidth, "-"))
+			if ui.isWeekend(day) {
+				sb.WriteString(fmt.Sprintf("%*s", dayColumnWidth, weekendPlaceholder))
+			} else {
+				sb.WriteString(fmt.Sprintf("%*s", dayColumnWidth, "-"))
+			}
 		}
 	}
 	sb.WriteString("\n")
+}
+
+// isWeekend reports whether the given day of the currently selected month is a weekend (Saturday or Sunday)
+func (ui *ReportUI) isWeekend(day int) bool {
+	date := time.Date(ui.reportMonth.Year(), ui.reportMonth.Month(), day, 0, 0, 0, 0, time.UTC)
+	wd := date.Weekday()
+	return wd == time.Saturday || wd == time.Sunday
 }
 
 func groupDataByTaskAndDay(data []clockify.ReportTimeEntry) (map[string]map[int]time.Duration, map[string]bool, map[string]map[int]string) {

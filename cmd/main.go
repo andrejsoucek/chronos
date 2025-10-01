@@ -117,12 +117,21 @@ func createCommands(projectId string, l *linear.Linear, g *gitlab.Gitlab, cify *
 				Name:    "report",
 				Aliases: []string{"r"},
 				Usage:   "Show a report of logged time entries",
+				Flags: []cli.Flag{
+					&cli.IntFlag{
+						Name:        "month",
+						Aliases:     []string{"m"},
+						DefaultText: "current month",
+					},
+				},
 				Action: func(ctx context.Context, cmd *cli.Command) error {
 					now := time.Now()
-					currentYear, currentMonth, _ := now.Date()
-					currentLocation := now.Location()
+					year, month, _ := now.Date()
+					if cmd.Int("month") != 0 {
+						month = time.Month(cmd.Int("month"))
+					}
 
-					firstOfMonth := time.Date(currentYear, currentMonth, 1, 0, 0, 0, 0, currentLocation)
+					firstOfMonth := time.Date(year, month, 1, 0, 0, 0, 0, now.Location())
 					lastOfMonth := firstOfMonth.AddDate(0, 1, -1)
 					err := action.ShowReport(cify, l, g, projectId, firstOfMonth, lastOfMonth)
 					if err != nil {

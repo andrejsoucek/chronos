@@ -107,6 +107,8 @@ chronos log 1h15m "Code review for PR #123"
 chronos report
 # or use the alias
 chronos r
+
+chronos r -m 2 # Show report for February
 ```
 
 ### Help
