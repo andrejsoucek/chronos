@@ -132,7 +132,7 @@ func createCommands(projectId string, l *linear.Linear, g *gitlab.Gitlab, cify *
 					}
 
 					firstOfMonth := time.Date(year, month, 1, 0, 0, 0, 0, now.Location())
-					lastOfMonth := firstOfMonth.AddDate(0, 1, -1)
+					lastOfMonth := firstOfMonth.AddDate(0, 1, 0).Add(-time.Second) // Last second of the month
 					err := action.ShowReport(cify, l, g, projectId, firstOfMonth, lastOfMonth)
 					if err != nil {
 						return err

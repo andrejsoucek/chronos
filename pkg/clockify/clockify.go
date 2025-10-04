@@ -198,24 +198,16 @@ func (c *Clockify) DeleteLog(ID string) error {
 }
 
 func (c *Clockify) GetReport(from time.Time, to time.Time) ([]ReportTimeEntry, error) {
-	req, err := c.prepareReq(http.MethodGet, c.Config.BaseURL+"user/"+c.Config.UserID+"/time-entries")
+	url := fmt.Sprintf("%suser/%s/time-entries?start=%s&end=%s&page-size=1000",
+		c.Config.BaseURL,
+		c.Config.UserID,
+		from.Format("2006-01-02T15:04:05Z"),
+		to.Format("2006-01-02T15:04:05Z"))
+
+	req, err := c.prepareReq(http.MethodGet, url)
 	if err != nil {
 		return nil, err
 	}
-
-	body := map[string]interface{}{
-		"start":     from.Format(time.RFC3339),
-		"end":       to.Format(time.RFC3339),
-		"page-size": 1000,
-	}
-
-	jsonBody, err := json.Marshal(body)
-	if err != nil {
-		return nil, err
-	}
-
-	req.Body = io.NopCloser(bytes.NewBuffer(jsonBody))
-	req.Header.Set("Content-Type", "application/json")
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, err
