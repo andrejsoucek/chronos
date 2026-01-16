@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/andrejsoucek/chronos/pkg/clockify"
@@ -191,6 +192,7 @@ func (ui *ReportUI) refreshData(g *gocui.Gui, v *gocui.View) error {
 	for task := range taskNamesMap {
 		ui.taskNames = append(ui.taskNames, task)
 	}
+	sort.Strings(ui.taskNames)
 
 	// Reset selected cell if it's out of bounds
 	if ui.selectedCell.TaskIndex >= len(ui.taskNames) {

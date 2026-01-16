@@ -3,6 +3,7 @@ package ui
 import (
 	"fmt"
 	"log/slog"
+	"sort"
 	"strings"
 	"time"
 
@@ -85,6 +86,7 @@ func RenderReport(
 	for task := range taskNamesMap {
 		ui.taskNames = append(ui.taskNames, task)
 	}
+	sort.Strings(ui.taskNames)
 
 	g.SetManagerFunc(func(g *gocui.Gui) error {
 		return ui.layout(g)
@@ -157,6 +159,7 @@ func (ui *ReportUI) layout(g *gocui.Gui) error {
 		}
 		v.Title = fmt.Sprintf(" Time Report - %s ", ui.reportMonth.Format("January 2006"))
 		v.Wrap = false
+		v.Autoscroll = true
 
 		if _, err := g.SetCurrentView("table"); err != nil {
 			return err
