@@ -251,13 +251,12 @@ func (ui *ReportUI) layout(g *gocui.Gui) error {
 		v.Clear()
 		if len(ui.gitlabLastActivity) > 0 {
 			for _, item := range ui.gitlabLastActivity {
-				var name string
+				name := "N/A"
 				if item.Title != nil {
 					name = *item.Title
-				} else if item.PushData != nil {
-					name = item.PushData.Ref
-				} else {
-					name = "N/A"
+				}
+				if item.PushData != nil {
+					name += " " + item.PushData.Ref
 				}
 
 				fmt.Fprintf(v, "%-12s | %s\n", item.Action, name)
